@@ -10,8 +10,9 @@ require({
 ["jquery", "jquery.cometd"],
 function ($, cometd) {
     $(document).ready(function () {
+        var location = window.location.protocol + "//" + window.location.host;
         cometd.init({
-            url: "http://localhost:8080/channel/cometd",
+            url: location + "/channel/cometd",
             logLevel: 'info'
         });
 
@@ -24,6 +25,9 @@ function ($, cometd) {
             console.log(handshake);
             if (handshake.successful === true) {
                 cometd.subscribe("/data/output", _messageHandler);
+                cometd.publish("/data/command", {
+                   command: "login"
+                });
             }
         }
 

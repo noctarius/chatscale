@@ -16,6 +16,8 @@
  */
 package com.noctarius.chatscale;
 
+import com.hazelcast.core.Hazelcast;
+import com.hazelcast.core.HazelcastInstance;
 import org.cometd.bayeux.server.BayeuxServer;
 import org.cometd.server.BayeuxServerImpl;
 import org.cometd.server.CometDServlet;
@@ -36,7 +38,8 @@ public class Main {
 
         LOGGER.info("Starting ChatScale...");
 
-        Server server = new Server(8080);
+        int port = Integer.getInteger("chatscale.port");
+        Server server = new Server(port);
 
         ContextHandlerCollection contexts = new ContextHandlerCollection();
 
@@ -61,9 +64,11 @@ public class Main {
         server.setHandler(contexts);
         server.setStopAtShutdown(true);
 
+        HazelcastInstance hazelcastInstance = Hazelcast.newHazelcastInstance();
+
         server.start();
 
-        new ChannelHandler(bayeuxServer);
+        new ChannelHandler(bayeuxServer, hazelcastInstance);
 
         server.join();
     }
