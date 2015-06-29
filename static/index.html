@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script data-main="js/application" src="js/require.js"></script>
+
+    <script type="text/javascript">
+        function deliver() {
+            var name = $("#name").val();
+            var msg = $("#msg").val();
+
+            chat.send(name, msg);
+            $("#msg").val('');
+        }
+    </script>
+</head>
+
+<body>
+<div>
+    <input id="name" type="text">
+    <input id="msg" type="text" onkeydown="if (event.keyCode == 13) { deliver(); return false; }">
+</div>
+<div id="chat">
+
+</div>
+</body>
+</html>
