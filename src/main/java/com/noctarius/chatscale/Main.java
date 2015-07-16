@@ -37,14 +37,13 @@ public class Main {
             throws Exception {
 
         LOGGER.info("Starting ChatScale...");
+        HazelcastInstance hazelcastInstance = Hazelcast.newHazelcastInstance();
 
         int port = Integer.getInteger("chatscale.port");
         Server server = new Server(port);
 
         ContextHandlerCollection contexts = new ContextHandlerCollection();
-
-        ServletContextHandler context = new ServletContextHandler(
-                contexts, "/", ServletContextHandler.SESSIONS);
+        ServletContextHandler context = new ServletContextHandler(contexts, "/", ServletContextHandler.SESSIONS);
 
         BayeuxServerImpl bayeuxServer = new BayeuxServerImpl();
         context.setAttribute(BayeuxServer.ATTRIBUTE, bayeuxServer);
@@ -63,9 +62,6 @@ public class Main {
 
         server.setHandler(contexts);
         server.setStopAtShutdown(true);
-
-        HazelcastInstance hazelcastInstance = Hazelcast.newHazelcastInstance();
-
         server.start();
 
         new ChannelHandler(bayeuxServer, hazelcastInstance);

@@ -23,17 +23,27 @@ public class ChatMessage
 
     private String origin;
     private String name;
+    private String color;
     private String msg;
     private String msgId;
 
     public ChatMessage() {
     }
 
-    public ChatMessage(String origin, String name, String msg, String msgId) {
+    public ChatMessage(String origin, String name, String color, String msg, String msgId) {
         this.origin = origin;
         this.name = name;
+        this.color = color;
         this.msg = msg;
         this.msgId = msgId;
+    }
+
+    public String getColor() {
+        return color;
+    }
+
+    public void setColor(String color) {
+        this.color = color;
     }
 
     public String getOrigin() {

@@ -11,6 +11,9 @@ require({
 function ($, cometd) {
     $(document).ready(function () {
         var location = window.location.protocol + "//" + window.location.host;
+        var user;
+
+
         cometd.init({
             url: location + "/channel/cometd",
             logLevel: 'info'
@@ -25,9 +28,6 @@ function ($, cometd) {
             console.log(handshake);
             if (handshake.successful === true) {
                 cometd.subscribe("/data/output", _messageHandler);
-                cometd.publish("/data/command", {
-                   command: "login"
-                });
             }
         }
 
@@ -36,16 +36,31 @@ function ($, cometd) {
         }
 
         function _messageHandler(message) {
-            console.log("received message: " + message.data);
-            $("#chat").append(message.data);
+            var response = message.data;
+            console.log("received message: " + response);
+
+            var command = response.command;
+            if (command == "login") {
+                user = $.parseJSON(response.user);
+                $("#login").hide();
+                $("#chatframe").show();
+            } else {
+                $("#chat").append(response);
+            }
         }
 
         chat = {
-            send: function(name, msg) {
+            send: function(msg) {
                 cometd.publish("/data/input", {
-                    name: name,
                     msg: msg
                 });
+            },
+
+            login: function(username) {
+                cometd.publish("/data/command", {
+                    command: "login",
+                    username: username
+                })
             }
         };
     })

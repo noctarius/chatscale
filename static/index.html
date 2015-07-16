@@ -5,18 +5,35 @@
 
     <script type="text/javascript">
         function deliver() {
-            var name = $("#name").val();
             var msg = $("#msg").val();
 
-            chat.send(name, msg);
+            chat.send(msg);
             $("#msg").val('');
+        }
+
+        function login() {
+            var username = $("#username").val();
+            chat.login(username);
         }
     </script>
 </head>
 
 <body>
-<div>
-    <input id="name" type="text">
+<div id="login">
+    <table>
+        <tr>
+            <td>Username:</td>
+            <td>
+                <input id="username" type="text" />
+            </td>
+        </tr>
+        <tr>
+            <td>&nbsp;</td>
+            <td><input type="submit" value="Login" onclick="login()" /></td>
+        </tr>
+    </table>
+</div>
+<div id="chatframe" style="display: none">
     <input id="msg" type="text" onkeydown="if (event.keyCode == 13) { deliver(); return false; }">
 </div>
 <div id="chat">

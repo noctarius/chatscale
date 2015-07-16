@@ -16,26 +16,37 @@
  */
 package com.noctarius.chatscale;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.hazelcast.core.Cluster;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.ITopic;
 import com.hazelcast.core.Message;
+import com.noctarius.chatscale.filter.CommandMessageFilter;
 import com.noctarius.chatscale.model.ChatMessage;
+import com.noctarius.chatscale.model.User;
 import org.cometd.bayeux.server.BayeuxServer;
 import org.cometd.bayeux.server.ServerMessage;
 import org.cometd.bayeux.server.ServerSession;
 import org.cometd.bayeux.server.ServerSession.RemoveListener;
 import org.cometd.server.AbstractService;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ConcurrentMap;
 
 public class ChannelHandler
         extends AbstractService {
 
-    private final List<String> users = new CopyOnWriteArrayList<>();
+    private final List<MessageFilter> messageFilters;
+
+    private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
+
+    private final ConcurrentMap<String, User> users;
 
     private final Cluster cluster;
     private final ITopic<ChatMessage> messageTopic;
@@ -43,7 +54,12 @@ public class ChannelHandler
     public ChannelHandler(BayeuxServer bayeux, HazelcastInstance hazelcastInstance) {
         super(bayeux, "ChannelHandler");
 
+        List<MessageFilter> messageFilters = new ArrayList<>();
+        messageFilters.add(new CommandMessageFilter(hazelcastInstance));
+        this.messageFilters = Collections.unmodifiableList(messageFilters);
+
         cluster = hazelcastInstance.getCluster();
+        users = hazelcastInstance.getMap("users");
         messageTopic = hazelcastInstance.getTopic("messages");
         messageTopic.addMessageListener(this::messageTopicListener);
 
@@ -57,14 +73,31 @@ public class ChannelHandler
     }
 
     public void messageHandler(ServerSession session, ServerMessage message) {
+        User user = users.get(session.getId());
+        if (user == null) {
+            return;
+        }
+
         Map<String, Object> data = message.getDataAsMap();
-        String name = (String) data.get("name");
         String msg = (String) data.get("msg");
+        for (MessageFilter messageFilter : messageFilters) {
+            String temp = messageFilter.filter(session, user, msg);
+            if (temp == null) {
+                return;
+            }
+            msg = temp;
+        }
+        if (msg == null) {
+            return;
+        }
 
         String msgId = UUID.randomUUID().toString();
 
-        publish(name, msg, msgId);
-        broadcast(name, msg, msgId, session);
+        String name = user.getUsername();
+        String color = user.getColor();
+
+        publish(name, color, msg, msgId);
+        broadcast(name, color, msg, msgId, session);
     }
 
     public void commandHandler(ServerSession session, ServerMessage message) {
@@ -72,33 +105,52 @@ public class ChannelHandler
         String command = (String) data.get("command");
 
         if ("login".equals(command)) {
-            users.add(session.getId());
-            session.addListener(new RemoveListener() {
+            String username = (String) data.get("username");
+            User user = new User(username, session.getId());
+            User temp = users.putIfAbsent(session.getId(), user);
+            if (temp == null) {
+                session.addListener(new RemoveListener() {
 
-                @Override
-                public void removed(ServerSession session, boolean timeout) {
-                    users.remove(session.getId());
-                }
-            });
+                    @Override
+                    public void removed(ServerSession session, boolean timeout) {
+                        users.remove(session.getId());
+                        session.removeListener(this);
+                    }
+                });
+            } else {
+                user = temp;
+            }
+
+            Map<String, Object> object = new HashMap<>();
+            object.put("command", "login");
+            object.put("user", gson.toJson(user));
+
+            ServerMessage.Mutable response = getBayeux().newMessage();
+            response.setChannel("/data/output");
+            response.setData(object);
+
+            session.deliver(session, response);
         }
     }
 
-    private void broadcast(String name, String msg, String msgId, ServerSession sender) {
+    private void broadcast(String name, String color, String msg, String msgId, ServerSession sender) {
         ServerMessage.Mutable message = getBayeux().newMessage();
         message.setChannel("/data/output");
-        message.setData("<p><span color='red'>" + name + ":</span> " + msg + "</p>");
+        message.setData("<p><span style='color: " + color + "'>" + name + ":</span> " + msg + "</p>");
         message.setId(msgId);
 
-        for (String sessionId : users) {
+        for (String sessionId : users.keySet()) {
             ServerSession serverSession = getBayeux().getSession(sessionId);
-            serverSession.deliver(sender, message);
+            if (serverSession != null) {
+                serverSession.deliver(sender, message);
+            }
         }
 
         System.out.println("broadcast {name: " + name + ", msg: " + msg + ", msgId: " + msgId + "}");
     }
 
-    private void publish(String name, String msg, String msgId) {
-        ChatMessage chatMessage = new ChatMessage(cluster.getLocalMember().getUuid(), name, msg, msgId);
+    private void publish(String name, String color, String msg, String msgId) {
+        ChatMessage chatMessage = new ChatMessage(cluster.getLocalMember().getUuid(), name, color, msg, msgId);
         messageTopic.publish(chatMessage);
         System.out.println("publish {name: " + name + ", msg: " + msg + ", msgId: " + msgId + "}");
     }
@@ -108,7 +160,7 @@ public class ChannelHandler
         String localId = cluster.getLocalMember().getUuid();
         if (!localId.equals(chatMessage.getOrigin())) {
             System.out.println("listener {message: " + chatMessage + "}");
-            broadcast(chatMessage.getName(), chatMessage.getMsg(), chatMessage.getMsgId(), null);
+            broadcast(chatMessage.getName(), chatMessage.getColor(), chatMessage.getMsg(), chatMessage.getMsgId(), null);
         }
     }
 
